@@ -1,2 +1,2 @@
-# IDMCleaner
-IDM Cleaner
+# IDM Cleaner
+Just run file clr.bat :)
