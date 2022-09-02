@@ -8,8 +8,9 @@ set /a _Debug=0
 
 Echo:
 CALL :ScriptEndTaks
-CALL :ScriptDelKeyReg
+CALL :ScriptMain
 CALL :ScriptExit
+
 goto :eof
 
 
@@ -23,14 +24,16 @@ taskkill /IM "idmBroker.exe" /F
 taskkill /IM "IDMIntegrator64.exe" /F
 taskkill /IM "IDMMsgHost.exe" /F
 taskkill /IM "MediumILStart.exe" /F
+
 Echo:
 DEL "%Temp%\*~DF*.TMP" /Q /S /F
+
 Echo:
 Exit /b
 
 
 
-:ScriptDelKeyReg
+:ScriptMain
 set "nul=1>nul 2>nul"
 setlocal EnableDelayedExpansion
 
@@ -114,28 +117,32 @@ for %%# in (
 "HKU\.DEFAULT\Software\Wow6432Node\Download Manager"
 "HKU\.DEFAULT\Software\DownloadManager"
 "HKU\.DEFAULT\Software\Wow6432Node\DownloadManager"
-) 
-do for /f "tokens=* delims=" %%A in ("%%#")
-do (set "reg=%%#" &CALL :DELETE)
+) do for /f "tokens=* delims=" %%A in ("%%#") do (
+set "reg=%%#" &CALL :DELETE
+)
 
 Echo: 
 Exit /b
 
 
 
-
 :DELETE
+
 REG DELETE %reg% /f %nul%
 
-if [%errorlevel%]==[0] 
-(set "status=powershell write-host 'Deleted ' -fore '"Green"' -NoNewline; write-host '""%reg%""' -fore '"White"'")
-else (set "status=echo Not found %reg%")
+if [%errorlevel%]==[0] (
+set "status=powershell write-host 'Deleted ' -fore '"Green"' -NoNewline; write-host '""%reg%""' -fore '"White"'"
+) else (
+set "status=echo Not found %reg%"
+)
 
 reg query %reg% %nul%
+
 if [%errorlevel%]==[0] (
 set "status=powershell write-host 'Deleted by taking ownership ' -fore '"Yellow"' -NoNewline; write-host '""%reg%""' -fore '"White"'"
 %nul% CALL :reg_takeownership "%reg%" "ReadPermissions, ReadKey" Allow %USER%
 %nul% CALL :reg_takeownership "%reg%" "SetValue, Delete" Deny S-1-5-32-544 S-1-5-18
+
 for /f "tokens=2 delims=:" %%s in ('sc showsid TrustedInstaller ^|findstr "S-1"') do set TI=%%s& call set TI=%%TI: =%%
 %nul% CALL :reg_takeownership "%reg%" FullControl Allow S-1-5-32-544 %TI%
 REG DELETE %reg% /f %nul%
@@ -143,31 +150,12 @@ REG DELETE %reg% /f %nul%
 
 reg query %reg% %nul%
 
-if [%errorlevel%]==[0] 
-(powershell write-host 'Failed to delete' -fore '"Red"' -NoNewline; write-host '""%reg%""' -fore '"White"') 
-else (%status%)
+if [%errorlevel%]==[0] (
+powershell write-host 'Failed to delete ' -fore '"Red"' -NoNewline; write-host '""%reg%""' -fore '"White"'
+) else (
+%status%
+)
 Exit /b
-
-
-
-
-::The SID for the built-in Administrators group is represented in standardized SID notation as the following string: S-1-5-32-544 
-:reg_takeownership          key:"HKCU\Console" perm:"FullControl" access:"Allow" user:"S-1-5-32-544" owner(optional):"S-1-5-18"
-powershell -nop -c "$A='%~1','%~2','%~3','%~4','%~5';iex(([io.file]::ReadAllText('%~f0')-split':regown\:.*')[1])"&exit/b:regown:
-$D1=[IO.IODescriptionAttribute].Module.GetType('System.Diagnostics.Process').GetMethods(42)|where{$_.Name-eq'SetPrivilege'}
-'SeTakeOwnershipPrivilege','SeBackupPrivilege','SeRestorePrivilege' |% {$D1.Invoke($null, @("$_",2))}
-$rk=$A[0]-split'\\',2; switch -regex($rk[0]){'[mM]'{$HK='LocalMachine'};'[uU]'{$HK='CurrentUser'};default{$HK='ClassesRoot'};}
-$key=$rk[1];$perm='FullControl',$A[1],$A[1];$access='Allow',$A[2],$A[2];$user=0,0,0; if($A[4]-eq''){$A[4]=$A[3]} ;$sec=0,0,0
-$rule=0,0,0; $sid=$A[4],$A[3],'S-1-5-32-544'; 0,1,2 |% {$user[$_]=[System.Security.Principal.SecurityIdentifier]$sid[$_]
-$rule[$_]=new-object System.Security.AccessControl.RegistryAccessRule($user[$_],$perm[$_],3,1,$access[$_])
-$sec[$_]=new-object System.Security.AccessControl.RegistrySecurity}; $sec[0].SetOwner($user[0]); $sec[2].SetOwner($user[2])
-function Reg_Own{param($hive,$key); $reg=[Microsoft.Win32.Registry]::$hive.OpenSubKey($key,'ReadWriteSubTree','TakeOwnership')
-$reg.SetAccessControl($sec[2]); $rep=$reg.OpenSubKey('','ReadWriteSubTree','ChangePermissions'); $acl=$rep.GetAccessControl()
-$acl.ResetAccessRule($rule[1]); $rep.SetAccessControl($acl); $acl=$sec[0]; $reg.SetAccessControl($acl)} ;Reg_Own $HK $key
-$rec=[Microsoft.Win32.Registry]::$HK.OpenSubKey($key);foreach($sub in $rec.GetSubKeyNames()){Reg_Own $HK "$($key+'\\'+$sub)"}
-Get-Acl $($rk[0]+':\\'+$rk[1])|fl
-
-
-
 :ScriptExit
 @pause
+@exit
